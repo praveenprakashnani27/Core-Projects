@@ -1,0 +1,114 @@
+<?xml version="1.0" encoding="UTF-8"?><w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"><w:body><w:p><w:pPr><w:pStyle w:val="code"/></w:pPr><w:r><w:t><![CDATA[% All calculations are done assuming the temperature to be the average
+% during a summer day at the equator. The process is iteratively repeated
+% till the correct outer surface temperature is reached. The material of
+% the wall is assumed to be made of Silicon Dioxide primarily(primary
+% component of glass).
+% Once the actual outer surface temperature is determined, the net heat loss
+% from the wall to the surroundings is expressed as qloss [W].
+% Atmosphere is assumed to be primarily carbon dioxide and the values for
+% the constants needed in different equations is extrapolated from the
+% appendix of the book.
+% Average velocity on surface of mars is considered to be 5m/s
+
+% constants
+Ta = -60; %ambient air temperature
+g = 3.721; %gravity on mars
+L = 3; %length of cylinder
+V = 5; %average velocity
+w = 0.5; %thickness of wall
+D = 5; %outer diameter of structure
+kwall = 1.2; %thermal conductivity of silicon dioxide
+Ti = 22; %Fixed inner wall temperature
+Tsactualcylinder = 0; %variable initialization
+Tscylinder = 1; %variable intialization
+Tsactualdome = 0; %variable initialization
+Tsdome = 1;
+
+while (abs(Tsactualcylinder - Tscylinder)>0.01 && abs(Tsactualdome - Tsdome)>0.01)
+    
+% Surface temperature and dependents of temperature
+Tscylinder = Tsactualcylinder;
+Tsdome = Tsactualdome;
+
+Tfcylinder = (Ta + Tscylinder)/2;
+nu = (7.36 + ((8.4-7.36)/20)*(Tfcylinder+7))*10^(-6); %extrapolated value for CO2
+alpha = (9.63 + ((11-9.63)/20)*(Tfcylinder+7))*10^(-6); %extrapolated value for CO2
+k = (15.2 + ((16.55-15.2)/20)*(Tfcylinder+7))*10^(-3); %extrapolated value for CO2
+Pr = (0.765 + ((0.766-0.765)/20)*(Tfcylinder+7)); %extrapolated value for CO2
+
+% Natural around cylinder
+
+%Cylinder is assumed to be a vertical plate for free convection
+RaL = (g/abs(Tfcylinder))*(L^3)*((Tscylinder - Ta)/(nu*alpha)); %Rayleigh Number
+%Since Ra comes to be greater than 10^9, Churchill and Chu correlation is
+%used for Nu
+Nu = (0.825 + ((0.387*(RaL^(1/6)))/(1 + (0.492/Pr)^(9/16))^(8/27)))^2;
+hcyl = Nu*k/L;
+
+% Forced around cylinder
+
+ReD = V*D/nu;
+%For this external flow around a cylinder is used and the correlation
+%recommended by Churchill and Bernstein is used. It is valid for RePr >=
+%0.2 which is true in this case.
+NuDforced = 0.3 + ((0.62*(ReD^0.5)*(Pr^(1/3)))/(1 + (0.4/Pr)^(2/3))^0.25)*(1 + (ReD/282000)^(5/8))^(4/5);
+hcylforced = NuDforced*k/D;
+
+Tfdome = (Ta + Tsdome)/2;
+nu = (7.36 + ((8.4-7.36)/20)*(Tfdome+7))*10^(-6); %extrapolated value for CO2
+alpha = (9.63 + ((11-9.63)/20)*(Tfdome+7))*10^(-6); %extrapolated value for CO2
+k = (15.2 + ((16.55-15.2)/20)*(Tfdome+7))*10^(-3); %extrapolated value for CO2
+Pr = (0.765 + ((0.766-0.765)/20)*(Tfdome+7)); %extrapolated value for CO2
+
+% Natural around dome
+
+%approximated as a sphere
+RaD = (g/abs(Tfdome))*(D^3)*((Tsdome - Ta)/(nu*alpha));
+%again Turbulent since Ra is around 10^12 but since no other relation is
+%know, it is assumed to be good enough for the 10^11 relation, i.e the
+%correlation for spheres in fluids by Churchill is used
+NuD = 2 + ((0.589*(RaD^0.25))/(1 + (0.469/Pr)^(9/16))^(4/9));
+hdome = NuD*k/D;
+
+% Forced around dome
+
+%finally for forced around a dome, the dome is approximated as a sphere and
+%the correlation by Whitaker is used to calculate h after calculating all
+%the properties at ambient temperature.
+nudomeforced = (7.36 + ((8.4-7.36)/20)*(Ta+7))*10^(-6);
+alphadomeforced = (9.63 + ((11-9.63)/20)*(Ta+7))*10^(-6);
+kdomeforced = (15.2 + ((16.55-15.2)/20)*(Ta+7))*10^(-3);
+Prdomeforced = (0.765 + ((0.766-0.765)/20)*(7+Ta));
+ReDomeforced = V*D/nudomeforced;
+muTa = (140 + ((149-140)/20)*(Ta+7))*10^(-7);
+muS = (140 + ((149-140)/20)*(Tsdome-7))*10^(-7);
+NuDomeforced = 2 + (0.4*(ReDomeforced^0.5) + 0.06*(ReDomeforced^(2/3)))*(Pr^0.4)*((muTa/muS)^0.25);
+hdomeforced = NuDomeforced*k/D;
+
+% Net h
+
+%Correlation for cylinders and spheres is used to find the net h for the 2
+%bodies.
+hcylinder = (hcyl^3.5 + hcylforced^3.5)^(1/3.5);
+hdome = (hdome^3.5 + hdomeforced^3.5)^(1/3.5);
+
+
+% used qconduction + qradiation (solar radiation will always add heat to
+% the system) = qconvection
+% qconduction = (thermal conductivity)*width*(Tinner - Tsurface)
+% qradiation is found using Omkar's analysis. The value taken is 160 W/m2
+% qconvection = (HT coeffecient)*(Surface area)*(Tsurface - Tambient)
+
+Tsactualcylinder = (kwall*w*Ti + hcylinder*pi*D*L*Ta + 160*pi*D*L)/(pi*D*L*hcylinder + kwall*w);
+Tsactualdome = (kwall*w*Ti + hdome*(pi*D*D/2)*Ta + 160*(pi*D*D/2))/((pi*D*D/2)*hdome + kwall*w);
+end
+
+Tsactualcylinder %Final outerwall temperature of the cylinder
+Tsactualdome %Final outerwall temperature of the dome
+
+qlosscylinder = hcylinder*(Tsactualcylinder-Ta)
+qlossdome = hdome*(Tsactualdome - Ta)
+
+
+
+qloss = qlossdome + qlosscylinder %total heat loss from both the bodies combined]]></w:t></w:r></w:p></w:body></w:document>
